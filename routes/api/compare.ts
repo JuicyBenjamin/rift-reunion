@@ -46,10 +46,11 @@ async function getMatchHistory(puuid: string, region: string, mode: "lol" | "tft
   const batchSize = 100;
   
   const gameType = mode === "tft" ? "tft" : "lol";
+  const version = mode === "tft" ? "v1" : "v5";
   
   while (start < count) {
     const currentBatchSize = Math.min(batchSize, count - start);
-    const url = `https://${routing}.api.riotgames.com/${gameType}/match/v1/matches/by-puuid/${puuid}/ids?start=${start}&count=${currentBatchSize}`;
+    const url = `https://${routing}.api.riotgames.com/${gameType}/match/${version}/matches/by-puuid/${puuid}/ids?start=${start}&count=${currentBatchSize}`;
     
     const response = await fetch(url, {
       headers: {
