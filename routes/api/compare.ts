@@ -39,16 +39,17 @@ async function getAccountByRiotId(gameName: string, tagLine: string, region: str
   return await response.json();
 }
 
-async function getMatchHistory(puuid: string, region: string, count: number = 100): Promise<string[]> {
+async function getMatchHistory(puuid: string, region: string, mode: "lol" | "tft", count: number = 100): Promise<string[]> {
   const routing = regionToRouting[region] || "americas";
   const allMatches: string[] = [];
   let start = 0;
-  const batchSize = 100; // Max per request
+  const batchSize = 100;
   
-  // Fetch up to 'count' matches in batches of 100
+  const gameType = mode === "tft" ? "tft" : "lol";
+  
   while (start < count) {
     const currentBatchSize = Math.min(batchSize, count - start);
-    const url = `https://${routing}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?start=${start}&count=${currentBatchSize}`;
+    const url = `https://${routing}.api.riotgames.com/${gameType}/match/v1/matches/by-puuid/${puuid}/ids?start=${start}&count=${currentBatchSize}`;
     
     const response = await fetch(url, {
       headers: {
@@ -57,35 +58,38 @@ async function getMatchHistory(puuid: string, region: string, count: number = 10
     });
 
     if (!response.ok) {
+      if (response.status === 429) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        continue;
+      }
       throw new Error(`Failed to fetch match history: ${response.statusText}`);
     }
 
     const matches: string[] = await response.json();
     
-    // If we got fewer matches than requested, we've reached the end
     if (matches.length === 0) {
       break;
     }
     
     allMatches.push(...matches);
     
-    // If we got fewer than the batch size, there are no more matches
     if (matches.length < currentBatchSize) {
       break;
     }
     
     start += currentBatchSize;
     
-    // Small delay to respect rate limits (development key: 20 req/sec)
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise(resolve => setTimeout(resolve, 100));
   }
 
   return allMatches;
 }
 
-async function getMatchDetails(matchId: string, region: string) {
+async function getMatchDetails(matchId: string, region: string, mode: "lol" | "tft") {
   const routing = regionToRouting[region] || "americas";
-  const url = `https://${routing}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
+  const gameType = mode === "tft" ? "tft" : "lol";
+  const version = mode === "tft" ? "v1" : "v5";
+  const url = `https://${routing}.api.riotgames.com/${gameType}/match/${version}/matches/${matchId}`;
   
   const response = await fetch(url, {
     headers: {
@@ -117,7 +121,7 @@ export const handler = define.handlers({
 
     try {
       const body = await ctx.req.json();
-      const { player1, player2, region } = body;
+      const { player1, player2, region, mode = "lol" } = body;
 
       // Parse player names (format: Name#TAG)
       const [gameName1, tagLine1] = player1.split("#");
@@ -136,50 +140,70 @@ export const handler = define.handlers({
         getAccountByRiotId(gameName2, tagLine2, region),
       ]);
 
-      // Get match histories (max 500 matches per player to stay within reasonable limits)
-      const [matches1, matches2] = await Promise.all([
-        getMatchHistory(account1.puuid, region, 500),
-        getMatchHistory(account2.puuid, region, 500),
-      ]);
+      const matches1 = await getMatchHistory(account1.puuid, region, mode, 500);
+      const matches2 = await getMatchHistory(account2.puuid, region, mode, 500);
 
-      console.log(`Match history for ${account1.gameName}:`, matches1);
-      console.log(`Match history for ${account2.gameName}:`, matches2);
-      console.log(`Total matches found - ${account1.gameName}: ${matches1.length}, ${account2.gameName}: ${matches2.length}`);
-
-      // Find shared matches
       const sharedMatchIds = matches1.filter((id) => matches2.includes(id));
-      
-      console.log(`Shared match IDs:`, sharedMatchIds);
 
-      // Get details for shared matches
-      const sharedMatches = await Promise.all(
-        sharedMatchIds.map((id) => getMatchDetails(id, region))
-      );
+      const sharedMatches = [];
+      for (const id of sharedMatchIds) {
+        const match = await getMatchDetails(id, region, mode);
+        sharedMatches.push(match);
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
 
       const matchData = sharedMatches.map((match) => {
-        const player1Data = match.info.participants.find(
-          (p: any) => p.puuid === account1.puuid
-        );
-        const player2Data = match.info.participants.find(
-          (p: any) => p.puuid === account2.puuid
-        );
+        if (mode === "tft") {
+          // TFT match data structure
+          const player1Data = match.info.participants.find(
+            (p: any) => p.puuid === account1.puuid
+          );
+          const player2Data = match.info.participants.find(
+            (p: any) => p.puuid === account2.puuid
+          );
 
-        return {
-          matchId: match.metadata.matchId,
-          gameMode: match.info.gameMode,
-          timestamp: match.info.gameStartTimestamp,
-          duration: formatDuration(match.info.gameDuration),
-          players: {
-            player1: {
-              champion: player1Data?.championName,
-              team: player1Data?.teamId,
+          return {
+            matchId: match.metadata.match_id,
+            gameMode: match.info.tft_set_number ? `Set ${match.info.tft_set_number}` : "TFT",
+            timestamp: match.info.game_datetime,
+            duration: formatDuration(match.info.game_length),
+            players: {
+              player1: {
+                placement: player1Data?.placement,
+                traits: player1Data?.traits?.slice(0, 3).map((t: any) => t.name).join(", ") || "N/A",
+              },
+              player2: {
+                placement: player2Data?.placement,
+                traits: player2Data?.traits?.slice(0, 3).map((t: any) => t.name).join(", ") || "N/A",
+              },
             },
-            player2: {
-              champion: player2Data?.championName,
-              team: player2Data?.teamId,
+          };
+        } else {
+          // LoL match data structure
+          const player1Data = match.info.participants.find(
+            (p: any) => p.puuid === account1.puuid
+          );
+          const player2Data = match.info.participants.find(
+            (p: any) => p.puuid === account2.puuid
+          );
+
+          return {
+            matchId: match.metadata.matchId,
+            gameMode: match.info.gameMode,
+            timestamp: match.info.gameStartTimestamp,
+            duration: formatDuration(match.info.gameDuration),
+            players: {
+              player1: {
+                champion: player1Data?.championName,
+                team: player1Data?.teamId,
+              },
+              player2: {
+                champion: player2Data?.championName,
+                team: player2Data?.teamId,
+              },
             },
-          },
-        };
+          };
+        }
       });
 
       return Response.json({

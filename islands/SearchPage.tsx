@@ -1,15 +1,17 @@
 import { useSignal } from "@preact/signals";
 
-interface SearchFormProps {
+interface SearchPageProps {
   initialPlayer1: string;
   initialPlayer2: string;
   initialRegion: string;
+  initialMode: "lol" | "tft";
 }
 
-export default function SearchForm(props: SearchFormProps) {
+export default function SearchPage(props: SearchPageProps) {
   const player1 = useSignal(props.initialPlayer1);
   const player2 = useSignal(props.initialPlayer2);
   const region = useSignal(props.initialRegion);
+  const mode = useSignal<"lol" | "tft">(props.initialMode);
   const isLoading = useSignal(false);
   const results = useSignal<any>(null);
   const error = useSignal("");
@@ -19,9 +21,16 @@ export default function SearchForm(props: SearchFormProps) {
     if (player1.value) params.set("player1", player1.value);
     if (player2.value) params.set("player2", player2.value);
     if (region.value) params.set("region", region.value);
+    params.set("mode", mode.value);
     
     const newURL = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, "", newURL);
+  };
+
+  const handleModeToggle = (newMode: "lol" | "tft") => {
+    mode.value = newMode;
+    results.value = null;
+    updateURL();
   };
 
   const handlePlayer1Change = (e: Event) => {
@@ -62,6 +71,7 @@ export default function SearchForm(props: SearchFormProps) {
           player1: player1.value.trim(),
           player2: player2.value.trim(),
           region: region.value,
+          mode: mode.value,
         }),
       });
 
@@ -87,7 +97,28 @@ export default function SearchForm(props: SearchFormProps) {
   };
 
   return (
-    <div class="w-full">
+    <div class="w-full max-w-2xl">
+      {/* Game Mode Toggle */}
+      <div class="flex justify-center mb-6">
+        <div class="join">
+          <button
+            type="button"
+            onClick={() => handleModeToggle("lol")}
+            class={`btn join-item ${mode.value === "lol" ? "btn-primary" : "btn-ghost"}`}
+          >
+            ⚔️ League of Legends
+          </button>
+          <button
+            type="button"
+            onClick={() => handleModeToggle("tft")}
+            class={`btn join-item ${mode.value === "tft" ? "btn-primary" : "btn-ghost"}`}
+          >
+            🐧 Teamfight Tactics
+          </button>
+        </div>
+      </div>
+
+      {/* Search Form */}
       <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
           <form onSubmit={handleSubmit} class="space-y-4">
@@ -168,6 +199,7 @@ export default function SearchForm(props: SearchFormProps) {
         </div>
       </div>
 
+      {/* Results */}
       {results.value && (
         <div class="card bg-base-100 shadow-xl mt-6">
           <div class="card-body">
@@ -208,12 +240,25 @@ export default function SearchForm(props: SearchFormProps) {
                         </div>
                         {match.players && (
                           <div class="mt-2">
-                            <p class="text-sm">
-                              <span class="font-semibold">{results.value.player1.gameName}</span>: {match.players.player1.champion}
-                            </p>
-                            <p class="text-sm">
-                              <span class="font-semibold">{results.value.player2.gameName}</span>: {match.players.player2.champion}
-                            </p>
+                            {mode.value === "tft" ? (
+                              <>
+                                <p class="text-sm">
+                                  <span class="font-semibold">{results.value.player1.gameName}</span>: #{match.players.player1.placement} - {match.players.player1.traits}
+                                </p>
+                                <p class="text-sm">
+                                  <span class="font-semibold">{results.value.player2.gameName}</span>: #{match.players.player2.placement} - {match.players.player2.traits}
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <p class="text-sm">
+                                  <span class="font-semibold">{results.value.player1.gameName}</span>: {match.players.player1.champion}
+                                </p>
+                                <p class="text-sm">
+                                  <span class="font-semibold">{results.value.player2.gameName}</span>: {match.players.player2.champion}
+                                </p>
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
