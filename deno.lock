@@ -34,6 +34,7 @@
     "npm:@preact/signals@^2.5.0": "2.6.0_preact@10.28.2",
     "npm:@prefresh/vite@^2.4.8": "2.4.11_preact@10.28.2_vite@7.3.1__picomatch@4.0.3",
     "npm:@tailwindcss/vite@^4.1.12": "4.1.18_vite@7.3.1__picomatch@4.0.3",
+    "npm:daisyui@5": "5.5.14",
     "npm:esbuild-wasm@~0.25.11": "0.25.12",
     "npm:esbuild@0.25.7": "0.25.7",
     "npm:esbuild@~0.25.5": "0.25.12",
@@ -1054,6 +1055,9 @@
     "convert-source-map@2.0.0": {
       "integrity": "sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg=="
     },
+    "daisyui@5.5.14": {
+      "integrity": "sha512-L47rvw7I7hK68TA97VB8Ee0woHew+/ohR6Lx6Ah/krfISOqcG4My7poNpX5Mo5/ytMxiR40fEaz6njzDi7cuSg=="
+    },
     "debug@4.4.3": {
       "integrity": "sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==",
       "dependencies": [
@@ -1428,6 +1432,7 @@
       "jsr:@fresh/plugin-vite@^1.0.8",
       "npm:@preact/signals@^2.5.0",
       "npm:@tailwindcss/vite@^4.1.12",
+      "npm:daisyui@5",
       "npm:preact@^10.27.2",
       "npm:tailwindcss@^4.1.10",
       "npm:vite@^7.1.3"
